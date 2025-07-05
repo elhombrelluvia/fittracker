@@ -9,6 +9,12 @@ require('dotenv').config();
 // Importar rutas
 const authRoutes = require('./routes/authRoutes');
 
+// Importar rutas de ejercicios
+const exerciseRoutes = require('./routes/exerciseRoutes');
+
+// Importar rutas de workouts
+const workoutRoutes = require('./routes/workoutRoutes');
+
 const app = express();
 
 // Middlewares de seguridad
@@ -54,8 +60,10 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fittracke
 .then(() => console.log('✅ MongoDB conectado'))
 .catch(err => console.error('❌ Error conectando a MongoDB:', err));
 
-// Rutas
+// AQUI SE AGREGAN LAS RUTASSSSSS
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/exercises', exerciseRoutes);
+app.use('/api/workouts', workoutRoutes);
 
 // Ruta de prueba
 app.get('/api/test', (req, res) => {
@@ -86,6 +94,8 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
+
+
 
 const PORT = process.env.PORT || 5000;
 
