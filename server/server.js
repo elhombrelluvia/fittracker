@@ -1,8 +1,13 @@
-// server/server.js
+// server/server.js (actualizar)
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+// Importar modelos
+const User = require('./models/User');
+const Exercise = require('./models/Exercise');
+const Workout = require('./models/Workout');
 
 // Cargar variables de entorno
 dotenv.config();
@@ -24,7 +29,25 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // Rutas básicas
 app.get('/api/health', (req, res) => {
-  res.json({ message: 'FitTracker API funcionando! 💪' });
+  res.json({ 
+    message: 'FitTracker API funcionando! 💪',
+    timestamp: new Date().toISOString(),
+    models: {
+      User: 'User model loaded',
+      Exercise: 'Exercise model loaded',
+      Workout: 'Workout model loaded'
+    }
+  });
+});
+
+// Ruta para obtener ejercicios (temporal para probar)
+app.get('/api/exercises', async (req, res) => {
+  try {
+    const exercises = await Exercise.find({ isCustom: false });
+    res.json(exercises);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Iniciar servidor
