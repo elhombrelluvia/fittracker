@@ -1,99 +1,266 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Skeleton, { SkeletonCard } from '../components/ui/Skeleton';
+import Modal, { ConfirmModal } from '../components/ui/Modal';
 
 const Workouts = () => {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('date');
+  const [deleteModal, setDeleteModal] = useState({ open: false, workoutId: null, workoutName: '' });
 
   useEffect(() => {
-    const fetchWorkouts = async () => {
-      try {
-        const res = await axios.get(
-          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/workouts`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setWorkouts(res.data.workouts || res.data.data || []);
-      } catch (err) {
-        setWorkouts([]);
-      }
-      setLoading(false);
-    };
     fetchWorkouts();
   }, [token]);
 
-  const handleSelect = (workout) => {
-    setSelected(selected && selected._id === workout._id ? null : workout);
+  const fetchWorkouts = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/workouts`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setWorkouts(res.data.workouts || res.data.data || []);
+      setError('');
+    } catch (err) {
+      setWorkouts([]);
+      setError('Error al cargar entrenamientos');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleDeleteClick = (workout) => {
+    setDeleteModal({
+      open: true,
+      workoutId: workout._id,
+      workoutName: workout.name || workout.title || 'Entrenamiento'
+    });
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await axios.delete(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/workouts/${deleteModal.workoutId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setWorkouts(workouts.filter(w => w._id !== deleteModal.workoutId));
+      setDeleteModal({ open: false, workoutId: null, workoutName: '' });
+    } catch (err) {
+      setError('Error al eliminar entrenamiento');
+    }
+  };
+
+  // Filtrar y ordenar workouts
+  const filteredWorkouts = workouts
+    .filter(workout => 
+      workout.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workout.title?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortBy === 'date') {
+        return new Date(b.date) - new Date(a.date);
+      }
+      if (sortBy === 'name') {
+        return (a.name || a.title || '').localeCompare(b.name || b.title || '');
+      }
+      if (sortBy === 'exercises') {
+        return (b.exercises?.length || 0) - (a.exercises?.length || 0);
+      }
+      return 0;
+    });
+
+  if (loading) {
+    return (
+      <div className="workouts-page">
+        <div className="page-header">
+          <Skeleton width="60%" height="48px" lines={2} />
+          <Skeleton width="150px" height="44px" />
+        </div>
+        <div className="workouts-grid">
+          {[1, 2, 3, 4].map(i => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="card">
-      <h2>Mis Rutinas</h2>
-      {loading ? (
-        <p>Cargando rutinas...</p>
-      ) : workouts.length === 0 ? (
-        <p>No tienes rutinas registradas.</p>
+    <div className="workouts-page">
+      {/* Header */}
+      <div className="page-header">
+        <div className="page-title-section">
+          <h1 className="page-title">
+            <span className="emoji">💪</span> Mis Entrenamientos
+          </h1>
+          <p className="page-subtitle">
+            Gestiona y revisa tus rutinas de ejercicios
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => navigate('/workouts/create')}
+        >
+          <span className="emoji">➕</span> Nueva Rutina
+        </Button>
+      </div>
+
+      {/* Filtros y búsqueda */}
+      <div className="workouts-filters">
+        <Input
+          placeholder="Buscar entrenamientos..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          icon="🔍"
+          className="search-input-custom"
+        />
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="sort-select"
+        >
+          <option value="date">Más recientes</option>
+          <option value="name">Nombre A-Z</option>
+          <option value="exercises">Más ejercicios</option>
+        </select>
+      </div>
+
+      {/* Estadísticas rápidas */}
+      <div className="workouts-stats">
+        <div className="stat-item">
+          <span className="stat-number">{workouts.length}</span>
+          <span className="stat-label">Total</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-number">
+            {workouts.reduce((total, w) => total + (w.exercises?.length || 0), 0)}
+          </span>
+          <span className="stat-label">Ejercicios</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-number">
+            {workouts.filter(w => {
+              const workoutDate = new Date(w.date);
+              const weekAgo = new Date();
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              return workoutDate >= weekAgo;
+            }).length}
+          </span>
+          <span className="stat-label">Esta semana</span>
+        </div>
+      </div>
+
+      {/* Lista de entrenamientos */}
+      {error && (
+        <div className="error-message">
+          <span className="emoji">⚠️</span> {error}
+        </div>
+      )}
+
+      {filteredWorkouts.length === 0 ? (
+        <Card variant="flat">
+          <div className="empty-state">
+            <div className="empty-icon">💪</div>
+            <h3>No hay entrenamientos</h3>
+            <p>
+              {searchTerm 
+                ? `No se encontraron entrenamientos que coincidan con "${searchTerm}"`
+                : 'Aún no has creado ningún entrenamiento'
+              }
+            </p>
+            <Button
+              variant="primary"
+              onClick={() => navigate('/workouts/create')}
+            >
+              <span className="emoji">➕</span> Crear mi primera rutina
+            </Button>
+          </div>
+        </Card>
       ) : (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {workouts.map(w => (
-            <li key={w._id} style={{ marginBottom: 24, borderBottom: '1px solid #eee', paddingBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <strong style={{ fontSize: 18 }}>{w.name}</strong>
-                  <span style={{ marginLeft: 12, color: '#888', fontSize: 13 }}>
-                    {new Date(w.date).toLocaleDateString()}
-                  </span>
-                  <div style={{ fontSize: 14, color: '#555', marginTop: 4 }}>
-                    {w.description}
-                  </div>
-                  <div style={{ fontSize: 13, marginTop: 4 }}>
-                    <b>Tipo:</b> {w.workout_type} &nbsp;|&nbsp;
-                    <b>Ejercicios:</b> {w.exercises?.length || 0} &nbsp;|&nbsp;
-                    <b>Grupos musculares:</b> {w.muscle_groups_targeted?.join(', ') || 'N/A'}
-                  </div>
+        <div className="workouts-grid">
+          {filteredWorkouts.map((workout) => (
+            <Card key={workout._id} className="workout-card">
+              <div className="workout-card-header">
+                <h3 className="workout-name">
+                  {workout.name || workout.title || 'Entrenamiento'}
+                </h3>
+                <div className="workout-date">
+                  {new Date(workout.date).toLocaleDateString()}
                 </div>
-                <button className="btn btn-link" onClick={() => handleSelect(w)}>
-                  {selected && selected._id === w._id ? 'Ocultar' : 'Ver detalles'}
-                </button>
-                <Link to={`/workouts/${w._id}/edit`} className="btn btn-link" style={{ marginLeft: 8 }}>
-                  Editar sets
-                </Link>
               </div>
-              {selected && selected._id === w._id && (
-                <div style={{ marginTop: 12, background: '#f6f8fa', borderRadius: 8, padding: 12 }}>
-                  <h4 style={{ margin: '8px 0' }}>Ejercicios:</h4>
-                  <ol>
-                    {w.exercises && w.exercises.length > 0 ? (
-                      w.exercises.map((ex, idx) => (
-                        <li key={ex._id || idx}>
-                          <b>{ex.exercise?.name || ex.exercise?.toString() || 'Ejercicio'}</b>
-                          {ex.notes && <span style={{ color: '#888' }}> — {ex.notes}</span>}
-                          <div style={{ fontSize: 13, marginLeft: 8 }}>
-                            Sets: {ex.sets?.length || 0}
-                          </div>
-                        </li>
-                      ))
-                    ) : (
-                      <li>No hay ejercicios en esta rutina.</li>
-                    )}
-                  </ol>
-                  {w.notes && (
-                    <div style={{ marginTop: 8 }}>
-                      <b>Notas:</b> {w.notes}
+              
+              <div className="workout-card-content">
+                <div className="workout-stats">
+                  <div className="workout-stat">
+                    <span className="emoji">🏋️</span>
+                    <span>{workout.exercises?.length || 0} ejercicios</span>
+                  </div>
+                  {workout.duration && (
+                    <div className="workout-stat">
+                      <span className="emoji">⏱️</span>
+                      <span>{workout.duration} min</span>
                     </div>
                   )}
-                  <div style={{ marginTop: 8, fontSize: 13, color: '#888' }}>
-                    Estado: {w.status} | Duración: {w.duration ? `${w.duration} min` : 'N/A'}
-                  </div>
                 </div>
-              )}
-            </li>
+                
+                {workout.exercises && workout.exercises.length > 0 && (
+                  <div className="exercise-preview">
+                    {workout.exercises.slice(0, 3).map((exercise, index) => (
+                      <span key={index} className="exercise-tag">
+                        {exercise.name}
+                      </span>
+                    ))}
+                    {workout.exercises.length > 3 && (
+                      <span className="exercise-tag more">
+                        +{workout.exercises.length - 3} más
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="workout-card-actions">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/workouts/${workout._id}/edit`)}
+                >
+                  <span className="emoji">✏️</span> Editar
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDeleteClick(workout)}
+                >
+                  <span className="emoji">🗑️</span> Eliminar
+                </Button>
+              </div>
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
+
+      {/* Modal de confirmación */}
+      <ConfirmModal
+        isOpen={deleteModal.open}
+        onClose={() => setDeleteModal({ open: false, workoutId: null, workoutName: '' })}
+        onConfirm={confirmDelete}
+        title="Eliminar entrenamiento"
+        message={`¿Estás seguro de que quieres eliminar "${deleteModal.workoutName}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+      />
     </div>
   );
 };

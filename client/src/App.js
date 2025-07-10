@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import './styles/global.css';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 
 // Páginas
 import Home from './pages/Home';
@@ -15,6 +17,9 @@ import CreateWorkout from './components/workouts/CreateWorkout';
 import EditWorkout from './components/workouts/EditWorkout';
 
 import PrivateRoute from './components/PrivateRoute';
+
+import './styles/global.css';
+
 
 function App() {
   return (
